@@ -3,6 +3,8 @@ from urllib import request
 from urllib import parse
 from urllib import error
 from bs4 import BeautifulSoup#用于解析网页
+from tkinter import * #界面库
+import tkinter.messagebox
 import configparser
 import chardet 
 import time
@@ -13,7 +15,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 returnLists = ["\u00a0\u00a0\u00a0\u00a0", "\u3000"] # "\u000d", 
 
-class Label:
+class LabelHtml:
     def __init__(self, label, name, sub):
         self.label = label
         self.name = name
@@ -34,9 +36,9 @@ def GetConfigLabels(config, section):
     for item in items:
         splits = item[1].split(',')
         if len(splits) == 2:
-            result.append(Label(splits[0],splits[1],""))
+            result.append(LabelHtml(splits[0],splits[1],""))
         elif len(splits) == 3:
-            result.append(Label(splits[0],splits[1],splits[2]))
+            result.append(LabelHtml(splits[0],splits[1],splits[2]))
     return result
 
 # 通过配置文件读取各项信息
@@ -45,6 +47,7 @@ config.read("conf.ini")
 
 downUrls = GetConfigItems(config, "DownloadUrls")
 testUrls = GetConfigItems(config, "TestUrls")
+openAutoTest = config.get("TestUrls", "OpenAutoTest") #是否开启自动测试，默认为False
 nextPages = GetConfigItems(config, "NextPages")
 indexPages = GetConfigItems(config, "IndexPages")
 
@@ -201,6 +204,9 @@ def WritePage(file, url):
     WriteBody(file, soup)
     file.flush()
     return FindNextUrl(soup, url)
+
+#默认书籍放到 C盘的xiabook目录下
+bookDir = "c:/xiabook/"
     
 def WriteBook(url):
     print("开始下载链接: "+url)
@@ -210,7 +216,10 @@ def WriteBook(url):
         fileMode = 'w'
         if addMode: #如果是追加模式，则open的参数要改掉
             fileMode = 'a'
-        file = open("c:/%s-%s.txt"%(truename,urlname), fileMode, encoding=bookCharset) 
+        # 创建目录
+        if not os.path.exists(bookDir):
+            os.makedirs(bookDir)
+        file = open(bookDir+"%s-%s.txt"%(truename,urlname), fileMode, encoding=bookCharset) 
         for i in range(0, pageNum): # 下载指定的页数
             if url:
                 url = WritePage(file, url)
@@ -233,6 +242,28 @@ def Restart(cmd, url, add=False):
 
 addMode = False #是否为重启后的追加写入模式
 
+ 
+#进入GUI模式
+def CreateGUI():
+    root = tkinter.Tk()
+    root.title("xiabook")
+    tkinter.Label(root, text="输入要下载的网络小说的地址：").pack()
+    urlGUI = tkinter.Entry(root,width=80)
+    urlGUI.insert(0,"https://www.sbkk88.com/huangyi/xunqinji/132366.html")
+    urlGUI.pack()
+
+    # 既然是用界面，那么就下载整本书，忽略配置文件中的设置
+    global pageNum
+    pageNum = 10000000
+    
+    def WriteBookbyGUI():
+        WriteBook(urlGUI.get())
+        tkinter.messagebox.showinfo("xiabook","下载完毕！生成的文件在c:/xiabook/目录中")
+    tkinter.Button(root,text="下载",command=WriteBookbyGUI,width=50).pack()
+    
+    # 进入消息循环
+    root.mainloop()
+
 if __name__ == '__main__':
     urls = [] 
     #用户通过命令行输入的url，要优先下载
@@ -243,15 +274,20 @@ if __name__ == '__main__':
             urls.extend(sys.argv[2:len(sys.argv)])
         else:
             urls.extend(sys.argv[1:len(sys.argv)])
-    elif len(downUrls): # 在配置文件中写了要下载的url，其次下载
+    # 在配置文件中写了要下载的url，其次下载
+    elif len(downUrls): 
         urls.extend(downUrls)
-    else: #最后进入内部测试模式
+    #判断进入内部测试模式#判断进入内部测试模式
+    elif openAutoTest.lower()=="true": 
         urls.extend(testUrls)
         
     if len(urls)==1: #一本书就直接下载
         WriteBook(urls[0])
         os.system("pause")
-    else: #多个url下载，则同时启动多个程序下载 
+    elif len(urls)>1: #多个url下载，则同时启动多个程序下载 
         for url in urls:
             Restart(sys.argv[0], url)
+    #前面一个url都没有设置，则进入界面操作
+    else: 
+        CreateGUI()
     
